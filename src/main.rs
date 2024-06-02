@@ -1,4 +1,5 @@
 mod domain;
+mod driving;
 mod helpers;
 mod tests;
 

@@ -6,4 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+actix-web = "4.6.0"
 serde = { version = "1.0.201", features = ["derive"] }
+serde_qs = { version = "0.13.0", features = ["actix4"] }
+validator = { version = "0.18.1", features = ["derive"] }
+
