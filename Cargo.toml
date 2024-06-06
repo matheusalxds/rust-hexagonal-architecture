@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 actix-web = "4.6.0"
+env_logger = "0.11.3"
 serde = { version = "1.0.201", features = ["derive"] }
 serde_qs = { version = "0.13.0", features = ["actix4"] }
 validator = { version = "0.18.1", features = ["derive"] }

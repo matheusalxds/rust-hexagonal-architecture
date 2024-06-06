@@ -1,13 +1,16 @@
 use actix_web::web::{self, Json};
+use actix_web::HttpResponse;
 use serde::{Deserialize, Serialize};
 use serde_qs::actix::QsQuery;
 use validator::Validate;
 
 use crate::domain;
 use crate::domain::create_sandwich::CreateError;
+use crate::domain::delete_one_sandwich::DeleteOneError;
 use crate::domain::find_all_sandwiches::FindAllError;
 use crate::domain::find_one_sandwich::FindOneError;
 use crate::domain::sandwich::{Sandwich, SandwichType};
+use crate::domain::update_sandwich::UpdateError;
 use crate::driving::rest_handler::errors::ApiError;
 use crate::driving::rest_handler::validate;
 use crate::helpers::{respond_json, string_vec_to_vec_str};
@@ -130,12 +133,74 @@ pub async fn get_by_id(path: web::Path<String>) -> Result<Json<SandwichResponse>
         })
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, Validate)]
+pub struct UpdateSandwichRequest {
+    #[validate(length(min = 5, message = "id is required and must be at least 5 characters"))]
+    pub id: String,
+
+    #[validate(length(
+        min = 3,
+        message = "name is required and must be at least 3 characters"
+    ))]
+    pub name: String,
+
+    #[validate(length(
+        min = 1,
+        message = "ingredients is required and must be at least 1 item"
+    ))]
+    pub ingredients: Vec<String>,
+
+    pub sandwich_type: SandwichType,
+}
+
+pub async fn update_sandwich(
+    request: Json<UpdateSandwichRequest>,
+) -> Result<Json<SandwichResponse>, ApiError> {
+    validate(&request)?;
+
+    let result = domain::update_sandwich::update_sandwich(
+        request.id.as_str(),
+        request.name.as_str(),
+        string_vec_to_vec_str(&request.ingredients).as_ref(),
+        &request.sandwich_type,
+    );
+
+    result
+        .map(|v| respond_json(SandwichResponse::from(v)))
+        .map_err(|e| match e {
+            UpdateError::Unknown(m) => ApiError::Unknown(m),
+            UpdateError::InvalidData(m) => ApiError::InvalidData(m),
+            UpdateError::NotFound => ApiError::NotFound(String::from(
+                "No sandwich to update corresponding to the specific criteria",
+            )),
+            UpdateError::Conflict(m) => ApiError::Conflict(m),
+        })
+}
+
+pub async fn delete_one_sandwich(path: web::Path<String>) -> Result<HttpResponse, ApiError> {
+    let sandwich_id = path.into_inner();
+
+    let result = domain::delete_one_sandwich::delete_one_sandwich(sandwich_id.as_str());
+
+    result
+        .map(|_| Ok(HttpResponse::Ok().finish()))
+        .map_err(|e| match e {
+            DeleteOneError::Unknown(m) => ApiError::Unknown(m),
+            DeleteOneError::InvalidData(m) => ApiError::BadRequest(m),
+            DeleteOneError::NotFound => ApiError::NotFound(String::from(
+                "No sandwich to delete corresponding with the received id",
+            )),
+        })?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::tests::test_utils::shared::{
-        assert_on_ingredients, stub_ingredients, stub_sandwich, SANDWICH_NAME, SANDWICH_TYPE,
+        assert_on_ingredients, stub_ingredients, stub_sandwich, CHEESEBURGER_NAME, SANDWICH_ID,
+        SANDWICH_NAME, SANDWICH_TYPE,
     };
+    use crate::tests::test_utils::stub_cheeseburger_ingredients;
     use actix_web::test::TestRequest;
     use actix_web::{test, web, App, FromRequest, Handler, Responder, Route};
 
@@ -230,5 +295,49 @@ mod tests {
     fn assert_on_sandwich_response(actual: &SandwichResponse, expected: &Sandwich) {
         assert_eq!(&actual.name, expected.name().value());
         assert_on_ingredients(&actual.ingredients, expected.ingredients().value());
+    }
+
+    #[actix_web::test]
+    async fn should_update_a_sandwich() {
+        let sandwich = stub_sandwich(true);
+
+        let updt_req = UpdateSandwichRequest {
+            id: sandwich.id().value().as_ref().unwrap().to_string(),
+            name: CHEESEBURGER_NAME.to_string(),
+            ingredients: stub_cheeseburger_ingredients(),
+            sandwich_type: SandwichType::Veggie,
+        };
+        let expected = Sandwich::new(
+            updt_req.id.clone(),
+            updt_req.name.clone(),
+            updt_req.ingredients.clone(),
+            updt_req.sandwich_type.clone(),
+        )
+        .unwrap();
+
+        let resp = execute(
+            "/",
+            None,
+            web::put(),
+            TestRequest::put(),
+            update_sandwich,
+            Some(updt_req),
+        )
+        .await;
+
+        assert_on_sandwich_response(&resp, &expected);
+    }
+
+    #[actix_web::test]
+    async fn should_delete_a_sandwich() {
+        let uri_to_call = format!("/{}", SANDWICH_ID);
+
+        let app =
+            test::init_service(App::new().route("/{id}", web::delete().to(delete_one_sandwich)))
+                .await;
+        let req = TestRequest::delete().uri(&uri_to_call).to_request();
+
+        let resp = test::call_service(&app, req).await;
+        assert!(resp.status().is_success());
     }
 }
