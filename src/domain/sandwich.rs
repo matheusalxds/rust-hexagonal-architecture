@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::domain::entity_dto::Entity;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum SandwichType {
     Meat,
@@ -77,6 +79,9 @@ pub struct Sandwich {
     ingredients: SandwichIngredients,
     sandwich_type: SandwichType,
 }
+
+impl Entity for Sandwich {}
+
 impl Sandwich {
     pub fn new(
         id: String,

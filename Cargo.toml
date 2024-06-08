@@ -7,8 +7,11 @@ edition = "2021"
 
 [dependencies]
 actix-web = "4.6.0"
+async-trait = "0.1.80"
 env_logger = "0.11.3"
+mongodb = "2.8.2"
 serde = { version = "1.0.201", features = ["derive"] }
 serde_qs = { version = "0.13.0", features = ["actix4"] }
+toml = "0.8.14"
 validator = { version = "0.18.1", features = ["derive"] }
 
